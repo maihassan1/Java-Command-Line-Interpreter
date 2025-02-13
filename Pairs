@@ -1,0 +1,22 @@
+public class Pairs {
+    private Process process;
+    private int executionTime;
+    private int timing;
+    public Pairs(int timing,Process process, int executionTime){
+        this.process = process;
+        this.executionTime = executionTime;
+        this.timing = timing;
+    }
+    public Process getProcess(){
+        return this.process;
+    }
+    public int getExecutionTime(){
+        return this.executionTime;
+    }
+    public int gettiming(){
+        return this.timing;
+    }
+    public void updateExecutionTime(int num){
+        this.executionTime+=num;
+    }
+}
