@@ -1,0 +1,177 @@
+import java.util.*;
+
+public class FCAIFactorScheduling implements processExecution {
+    List<Process> processes;
+    List<Process> tempProcesses;
+    double V1;
+    double V2;
+    private final timingGUI gui;
+    int contextSwitch;
+    double AVGTurnaroundTime = 0;
+    double AVGWaitingTime = 0;
+    List<Vector<Integer>> changesInQuantum = new ArrayList<>();
+    private List<String> processOrder = new LinkedList<String>();
+
+    FCAIFactorScheduling(List<Process> processList, int contextSwitchingTime, timingGUI gui) {
+        this.processes = processList;
+        this.gui = gui;
+        this.tempProcesses = new ArrayList<>(Collections.nCopies(processList.size(), null)); // Initialize with null
+        this.contextSwitch = contextSwitchingTime;
+        this.V1 = 0.0;
+        this.V2 = 0.0;
+
+        for (Process p : processList) {
+            V1 = Math.max(V1, p.arrivalTime);
+            V2 = Math.max(V2, p.burstTime);
+        }
+        V1 /= 10;
+        V2 /= 10;
+
+        // Initialize changesInQuantum with empty Vectors
+        for (int i = 0; i < processList.size(); i++) {
+            changesInQuantum.add(new Vector<>());
+        }
+    }
+
+
+    @Override
+    public void execute() {
+        for (Process p : processes) {
+            p.calculateFCAIFactor(V1, V2);
+            changesInQuantum.get(Integer.parseInt(p.ID) - 1).add(p.Quantum);
+        }
+        Deque<Process> dq = new LinkedList<>();
+        int CurrentTime = 0;
+        int done = 0;
+        boolean completed = false;
+        int ProcessesSize = processes.size();
+        String previousID = "";
+        while (done < ProcessesSize) {
+            Iterator<Process> it = processes.iterator();
+            while (it.hasNext()) {
+                Process p = it.next();
+                if (p.arrivalTime <= CurrentTime) {
+                    dq.add(p);
+                    it.remove();
+                }
+            }
+            if (dq.isEmpty()) {
+                CurrentTime++;
+                continue;
+            }
+            int FCAI = (int) 1e9;
+            Process currentProcess = null;
+            if (!completed) {
+                for (Process p : dq) {
+                    if (p.FCAIFactor < FCAI && (!p.ID.equals(previousID) || dq.size() == 1)) {
+                        FCAI = p.FCAIFactor;
+                        currentProcess = p;
+                    }
+                }
+                if (currentProcess != null) {
+                    dq.remove(currentProcess);
+                }
+            } else {
+                currentProcess = dq.pollFirst();
+                if (currentProcess != null) {
+                    FCAI = currentProcess.FCAIFactor;
+                }
+            }
+            previousID = currentProcess.ID;
+            processOrder.add(currentProcess.name);
+            int unusedQuantum = currentProcess.Quantum;
+            int execTime = (int) Math.min(Math.ceil(0.4 * currentProcess.Quantum), currentProcess.remainingTime);
+            int timebefore = CurrentTime;
+            currentProcess.waitingTime = CurrentTime - currentProcess.arrivalTime - (currentProcess.burstTime - currentProcess.remainingTime);
+            CurrentTime += execTime;
+            unusedQuantum -= execTime;
+            currentProcess.remainingTime -= execTime;
+
+            boolean found = false;
+
+            while (currentProcess.remainingTime > 0 && unusedQuantum > 0) {
+                Iterator<Process> it4 = processes.iterator();
+                while (it4.hasNext()) {
+                    Process p = it4.next();
+                    if (p.arrivalTime <= CurrentTime) {
+                        dq.add(p);
+                        it4.remove();
+                    }
+                }
+
+                for (Process p : dq) {
+                    if (p.FCAIFactor < FCAI) {
+                        //switch
+                        CurrentTime += contextSwitch;
+                        found = true;
+                        gui.updateGanttChart(timebefore, currentProcess, execTime);
+
+                        System.out.print("Process name: " + currentProcess.ID + " Remaining time: " + currentProcess.remainingTime + " Quantum: " + currentProcess.Quantum + " current FCAIFactor: " + currentProcess.FCAIFactor);
+                        currentProcess.calculateFCAIFactor(V1, V2);
+//                        changesInQuantum.get(Integer.parseInt(currentProcess.ID) - 1).add(currentProcess.Quantum);
+                        System.out.println(" current Fcai: " + currentProcess.FCAIFactor);
+                        if (currentProcess.remainingTime > 0) {
+                            dq.add(currentProcess);
+                        }
+                        break;
+                    }
+                }
+                if (found) {
+                    break;
+                }
+
+                unusedQuantum--;
+                currentProcess.remainingTime--;
+                execTime++;
+                CurrentTime++;
+            }
+
+            if (unusedQuantum > 0) {
+                currentProcess.Quantum += unusedQuantum;
+            } else {
+                currentProcess.Quantum += 2;
+            }
+            currentProcess.turnAroundTime = CurrentTime - currentProcess.arrivalTime;
+            if (currentProcess.remainingTime > 0) {
+                changesInQuantum.get(Integer.parseInt(currentProcess.ID) - 1).add(currentProcess.Quantum);
+                if (!found) {
+                    CurrentTime += contextSwitch;
+                    gui.updateGanttChart(timebefore, currentProcess, execTime);
+                    System.out.println("Execution Time: " + execTime);
+                    int oldFcai = currentProcess.FCAIFactor;
+                    currentProcess.calculateFCAIFactor(V1, V2);
+                    System.out.println("Process name: " + currentProcess.ID + " Remaining time: " + currentProcess.remainingTime + " Quantum: " + currentProcess.Quantum + " old FCAIFactor: " + oldFcai + " current FCAIFactor: " + currentProcess.FCAIFactor);
+                    dq.add(currentProcess);
+                    completed = true;
+                } else {
+                    completed = false;
+                }
+            } else {
+                gui.updateGanttChart(timebefore, currentProcess, execTime);
+                AVGWaitingTime += CurrentTime - currentProcess.arrivalTime - (currentProcess.burstTime);
+                AVGTurnaroundTime += CurrentTime - currentProcess.arrivalTime;
+                tempProcesses.set(Integer.parseInt(currentProcess.ID) - 1, currentProcess);
+                CurrentTime += contextSwitch;
+                completed = true;
+                System.out.println("Process name: " + currentProcess.ID + " completed.");
+                done++;
+            }
+        }
+        for (Process p : tempProcesses) {
+            gui.updateSchedule(p.name, (int) p.arrivalTime, p.burstTime, (int) p.waitingTime, (int) p.turnAroundTime, p.color);
+        }
+        String statistics = "Statistics\n" +
+                "Process order: " + processOrder.toString() + "\n" +
+                "Average waiting time: " + (AVGWaitingTime / tempProcesses.size()) + "\n" +
+                "Average turnaround time: " + (AVGTurnaroundTime / tempProcesses.size()) + "\n";
+
+        int processIndex = 1;
+        for (Vector<Integer> quantumChanges : changesInQuantum) {
+            statistics += "Process " + processIndex++ + ": " + quantumChanges.toString() + "\n";
+        }
+
+        gui.updateStatistics(statistics);
+
+
+    }
+}
