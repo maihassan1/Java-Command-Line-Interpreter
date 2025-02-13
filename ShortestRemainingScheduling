@@ -1,0 +1,112 @@
+import java.util.*;
+
+public class ShortestRemainingScheduling implements processExecution {
+    private final List<Process> processList;
+    private final int contextSwitchingTime;
+    private final timingGUI gui;
+    private final Comparator<Process> arrivalTimeComparator = Comparator.comparingDouble(o -> o.arrivalTime);
+    private final Comparator<Process> arrivalTimeComparator1 = Comparator.comparingDouble(o -> o.remainingTime);
+    private final List<Pairs> processOrder1 = new LinkedList<>();
+    private final List<String> processOrder = new LinkedList<>();
+    private final Comparator<Process> ageConsideringComparator(double currentTime) {
+        return (process1, process2)->{
+            double firstProcessPriority = calculateAgePriority(process1, currentTime);
+            double secondProcessPriority = calculateAgePriority(process2, currentTime);
+            int comp = Double.compare(process1.remainingTime, process2.remainingTime);
+            if(comp == 0){
+                return Double.compare(firstProcessPriority, secondProcessPriority);
+            }
+            else return comp;
+        };
+    }
+    private double calculateAgePriority(Process process, double currentTime) {
+        double waitingTime = currentTime - process.arrivalTime - (process.burstTime- process.remainingTime);
+        double agingFactor = 0.1;
+        double agingPriority = Math.pow(waitingTime, agingFactor);
+        if (waitingTime > 100.0) {
+            return Double.MAX_VALUE;
+        }
+        return Math.min(agingPriority, 1000.0);
+    }
+
+    public ShortestRemainingScheduling(List<Process> processList, int contextSwitching, timingGUI gui) {
+        this.processList = processList;
+        this.contextSwitchingTime = contextSwitching;
+        this.gui = gui;
+    }
+
+    @Override
+    public void execute() {
+        processList.sort(arrivalTimeComparator);
+        int currentTime = 0;
+        int completedProcesses = 0;
+        int processes = processList.size();
+        boolean isTheFirstElement = true;
+
+        while (completedProcesses < processes) {
+            PriorityQueue<Process> readyQueue = new PriorityQueue<>(ageConsideringComparator(currentTime));
+            for (Process p : processList) {
+                if (p.arrivalTime <= currentTime && p.remainingTime > 0) {
+                    readyQueue.add(p);
+                }
+            }
+
+            if (!readyQueue.isEmpty()) {
+                Process currentProcess = readyQueue.poll();
+                if (processOrder1.isEmpty() || !Objects.equals(processOrder1.getLast().getProcess().ID, currentProcess.ID)) {
+                    if (!isTheFirstElement) {
+                        currentTime += contextSwitchingTime;
+                    }
+                    processOrder1.add(new Pairs(currentTime,currentProcess, 1));
+                    isTheFirstElement = false;
+                }
+                else{
+                    processOrder1.getLast().updateExecutionTime(1);
+                }
+
+                currentProcess.remainingTime--;
+                currentTime++;
+
+                if (currentProcess.remainingTime == 0) {
+                    completedProcesses++;
+                    currentProcess.turnAroundTime = currentTime - currentProcess.arrivalTime;
+                    currentProcess.waitingTime = currentProcess.turnAroundTime - currentProcess.burstTime;
+
+                    gui.updateSchedule(currentProcess.name,(int)currentProcess.arrivalTime,currentProcess.burstTime,(int)currentProcess.waitingTime,(int)currentProcess.turnAroundTime,currentProcess.color);
+                }
+                else{
+                    readyQueue.add(currentProcess);
+                }
+            }
+            else{
+                currentTime++;
+            }
+        }
+
+        for(Pairs p : processOrder1) {
+            gui.updateGanttChart(p.gettiming(),p.getProcess(), p.getExecutionTime());
+            System.out.println("Process Name: "+p.getProcess().name+", Process ID: "+p.getProcess().ID+ ", Started at: "+p.gettiming()+", and is executed for: "+p.getExecutionTime());
+        }
+        System.out.println("Average Waiting Time: "+getAverageWaitingTime()+"\nAverage Turnaround Time: "+getAverageTurnAroundTime());
+
+        for(Pairs p : processOrder1){
+            processOrder.add(p.getProcess().ID);
+        }
+        String outputString = "Execution Order:" + processOrder +"\nAverage Waiting Time: "+getAverageWaitingTime() +"\nAverage Turnaround Time:" + getAverageTurnAroundTime();
+        gui.updateStatistics(outputString);
+    }
+    public double getAverageTurnAroundTime() {
+        double sum = 0;
+        for (Process p : processList) {
+            sum += p.turnAroundTime;
+        }
+        return sum / processList.size();
+    }
+    public double getAverageWaitingTime() {
+        double sum = 0;
+        for (Process p : processList) {
+            sum += p.waitingTime;
+        }
+        return sum / processList.size();
+    }
+}
