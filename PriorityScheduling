@@ -1,0 +1,73 @@
+import java.util.*;
+import java.util.Comparator;
+
+public class PriorityScheduling implements processExecution {
+    timingGUI timingGUI;
+    int contextSwitchingTime;
+    List<Process> processes;
+    List<String> processOrder = new LinkedList<>();
+    PriorityQueue<Process> priorityQ = new PriorityQueue<>(Comparator.comparingInt(p -> p.Priority));
+    List<Integer> avgWaitingTime = new ArrayList<>(), avgTurnaroundTime = new ArrayList<>();
+
+    PriorityScheduling(List<Process> processes, int contextSwitchingTime, timingGUI timingGUI) {
+        this.processes = processes;
+        this.contextSwitchingTime = contextSwitchingTime;
+        this.timingGUI = timingGUI;
+    }
+
+    @Override
+    public void execute() {
+        int timing = 0, waiting, turnaround;
+        int done = 0, p_size = processes.size();
+        while (done < p_size) {
+            for (Process p : processes) {
+                if (p.arrivalTime <= timing) {
+                    if (!priorityQ.contains(p)) {
+                        priorityQ.add(p);
+                    }
+                }
+            }
+            assert priorityQ.peek() != null;
+            if (priorityQ.peek() == null) {
+                timing++;
+                continue;
+            }
+            waiting = (int) Math.abs(timing - priorityQ.peek().arrivalTime);
+            avgWaitingTime.add(waiting);
+            assert priorityQ.peek() != null;
+            timingGUI.updateGanttChart(timing, priorityQ.peek(), priorityQ.peek().burstTime);
+            timing += priorityQ.peek().burstTime;
+            turnaround = (int) Math.abs(timing - priorityQ.peek().arrivalTime);
+            timing += contextSwitchingTime;
+            avgTurnaroundTime.add(turnaround);
+            Process process = priorityQ.poll();
+            System.out.println("Process ID: " + process.ID + " Process Name: " + process.name + " Turnaround Time: " + turnaround + " Waiting Time: " + waiting);
+            timingGUI.updateSchedule(process.name, (int) process.arrivalTime, process.burstTime, waiting, (int) (timing - process.arrivalTime), process.color);
+            processOrder.add(process.name);
+            for (Process p : processes) {
+                assert process != null;
+                if (Objects.equals(p.ID, process.ID)) {
+                    processes.remove(p);
+                    break;
+                }
+            }
+            done++;
+        }
+        double avgWTime = 0, avgTTime = 0;
+        for (double time : avgWaitingTime) {
+            avgWTime += time;
+        }
+        avgWTime /= avgWaitingTime.size();
+        System.out.println("Average Waiting Time: " + avgWTime);
+        avgTTime = 0;
+        for (double i : avgTurnaroundTime) {
+            avgTTime += i;
+        }
+        avgTTime /= avgTurnaroundTime.size();
+        System.out.println("Average Turnaround time is = " + avgTTime + ".");
+        String outputString = "Execution Order:" + processOrder +"\nAverage Waiting Time: "+avgWTime +"\nAverage Turnaround Time:" + avgTTime;
+        timingGUI.updateStatistics(outputString);
+    }
+
+
+}
