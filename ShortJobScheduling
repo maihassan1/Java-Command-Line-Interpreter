@@ -1,0 +1,86 @@
+import java.util.*;
+
+public class ShortJobScheduling implements processExecution {
+    private List<Process> processesList = new LinkedList<>();
+    private final List<Pairs> processOrder1 = new LinkedList<Pairs>();
+    private final List<String> processOrder = new LinkedList<>();
+    private final timingGUI gui;
+    private double contextSwitchingTime;
+    private final Comparator<Process> comp1 = Comparator.comparingDouble(o -> o.arrivalTime);
+    private final Comparator<Process> comp2 = Comparator.comparingDouble(o -> o.remainingTime);
+
+    public ShortJobScheduling(List<Process> p, double contextSwitching, timingGUI gui) {
+        this.processesList = p;
+        this.contextSwitchingTime = contextSwitching;
+        this.gui = gui;
+    }
+
+    @Override
+    public void execute() {
+        processesList.sort(comp1);
+        PriorityQueue<Process> readyQueue = new PriorityQueue<Process>(comp2);
+        int currentTime = 0;
+        int completedProcessesCount = 0;
+        double starvationThreshold = 10.0;
+        boolean isTheFirstElement = true;
+        int n = processesList.size();
+        while (completedProcessesCount < n) {
+            for (Process p : readyQueue) {
+                double waitingTime = currentTime - p.arrivalTime - (p.burstTime - p.remainingTime);
+                if (waitingTime > starvationThreshold) {
+                    p.remainingTime = (int) Math.max(1, p.remainingTime - waitingTime * 0.25);
+                }
+            }
+            for (Process p : processesList) {
+                if (p.arrivalTime <= currentTime && !readyQueue.contains(p) && !p.done) {
+                    readyQueue.add(p);
+                }
+            }
+            if (!readyQueue.isEmpty()) {
+                Process currentProcess = readyQueue.poll();
+                if (!isTheFirstElement) {
+                    currentTime += contextSwitchingTime;
+                }
+                processOrder1.add(new Pairs(currentTime, currentProcess, 0));
+                isTheFirstElement = false;
+                processOrder1.get(processOrder1.size() - 1).updateExecutionTime(currentProcess.burstTime);
+                currentTime += currentProcess.burstTime;
+                completedProcessesCount++;
+                currentProcess.done = true;
+                currentProcess.turnAroundTime = currentTime - currentProcess.arrivalTime;
+                currentProcess.waitingTime = currentProcess.turnAroundTime - currentProcess.burstTime;
+                System.out.println("Process ID: " + currentProcess.ID + " Process Name: " + currentProcess.name + " Turnaround Time: " + currentProcess.turnAroundTime + " Waiting Time: " + currentProcess.waitingTime);
+                gui.updateSchedule(currentProcess.name, (int) currentProcess.arrivalTime, currentProcess.burstTime, (int) currentProcess.waitingTime, (int) currentProcess.turnAroundTime, currentProcess.color);
+            } else {
+                currentTime++;
+            }
+        }
+
+        for (Pairs p : processOrder1) {
+            gui.updateGanttChart(p.gettiming(), p.getProcess(), p.getExecutionTime());
+        }
+        // Display final averages
+        for (Pairs p : processOrder1) {
+            processOrder.add(p.getProcess().ID);
+        }
+        String outputString ="Execution Order:" + processOrder + "\nAverage Waiting Time: "+ getAverageWaitingTime() +"\nAverage Turnaround Time: " + getAverageTurnAroundTime() ;
+        gui.updateStatistics(outputString);
+        System.out.println("Average Waiting Time: "+getAverageWaitingTime()+"\nAverage Turnaround Time: "+getAverageTurnAroundTime());
+    }
+
+    public double getAverageTurnAroundTime() {
+        double sum = 0;
+        for (Process p : processesList) {
+            sum += p.turnAroundTime;
+        }
+        return sum / processesList.size();
+    }
+
+    public double getAverageWaitingTime() {
+        double sum = 0;
+        for (Process p : processesList) {
+            sum += p.waitingTime;
+        }
+        return sum / processesList.size();
+    }
+}
