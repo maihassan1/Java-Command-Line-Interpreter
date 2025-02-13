@@ -1,0 +1,47 @@
+public class Process {
+    public int priority;
+    int Priority;
+    int burstTime;
+    int remainingTime;
+    double turnAroundTime;
+    double waitingTime;
+    double arrivalTime;
+    String ID;
+    String name;
+    String color;
+    Boolean done;
+    int Quantum;
+    boolean isFirst;
+    double burstPriority;
+    //----------
+    int FCAIFactor;
+//----------------
+    public Process(String id,int priority, int burstTime, double arrivalTime, String name, String color,int Quantum) {
+        this.ID = id;
+        this.Priority = priority;
+        this.burstTime = burstTime;
+        this.arrivalTime = arrivalTime;
+        this.name = name;
+        this.color = color;
+        this.remainingTime = burstTime;
+        this.turnAroundTime = 0;
+        this.waitingTime = 0;
+        this.done = false;
+        this.Quantum =Quantum;
+        this.isFirst = true;
+        this.burstPriority = 0;    //used for solving starvation in SJF
+    }
+    //-------------------
+    public void calculateFCAIFactor(double V1,double V2){
+        int firstcoordinate = (int)Math.ceil(10 - this.Priority);
+        int secondCoordinate = (int)Math.ceil((this.arrivalTime / V1));
+        int thirdCoordinate = (int)Math.ceil( (this.remainingTime / V2));
+        this.FCAIFactor= (int) Math.ceil(firstcoordinate + secondCoordinate + thirdCoordinate);
+    }
+    //--------------
+    @Override
+    public String toString() {
+        return "Process{name='" + ID + "', color='" + color + "', arrivalTime=" + arrivalTime +
+                ", burstTime=" + burstTime + ", priority=" + priority + "}";
+    }
+}
